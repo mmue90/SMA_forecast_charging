@@ -7,9 +7,9 @@ Copyright (c) [2020] [Matthias Boettger <mboe78@gmail.com>]
 var debug = 1; /*debug ausgabe ein oder aus 1/0 */
 
 // statische Parameter
-var update = 15, /*Update interval in sek, 15 ist ein guter Wert*/
-    pvpeak = 21610, /*pv anlagenleistung Wp */
-    batcap = 15360, /*netto batterie kapazität in Wh, statisch wegen fehlerhafter Berechnung im SI*/
+var update = 5, /*Update interval in sek, 15 ist ein guter Wert*/
+    pvpeak = 6600, /*pv anlagenleistung Wp */
+    batcap = 5120, /*netto batterie kapazität in Wh, statisch wegen fehlerhafter Berechnung im SI*/
     surlimit = 100, /*pv einspeise limit in % */
     bat_grenze = 10, /*nutzbare mindestladung der Batterie, nicht absolutwert sondern zzgl unterer entladegrenze des Systems! z.b. 50% Entladetiefe + 10% -> bat_grenze = 10*/
     bat_ziel = 100, /*gewünschtes Ladeziel der Regelung, bei Blei ca 85% da dann die Ladeleistung stark abfällt und keine vernünftige Regelung mehr zulässt. Bei LI sollte es 100 sein.*/
@@ -22,25 +22,18 @@ var update = 15, /*Update interval in sek, 15 ist ein guter Wert*/
     Verbraucher = []; /*starke Verbraucher mit Power in W berücksichtigen, hier kann der Realverbrauch in einem externen Script berechnet werden*/
 
 // BAT-WR Register Definition, nur bei Bedarf anpassen
-var CmpBMSOpMod = ModBusBat + ".holdingRegisters.40236_CmpBMSOpMod",/*Betriebsart des BMS*/
-    BatChaMinW = ModBusBat + ".holdingRegisters.40793_BatChaMinW",/*Minimale Batterieladeleistung*/
-    BatChaMaxW = ModBusBat + ".holdingRegisters.40795_BatChaMaxW",/*Maximale Batterieladeleistung*/
-    BatDsChaMinW = ModBusBat + ".holdingRegisters.40797_BatDschMinW",/*Minimale Batterieentladeleistung*/
-    BatDsChaMaxW = ModBusBat + ".holdingRegisters.40799_BatDschMaxW",/*Maximale Batterieentladeleistung*/
-    SollAC = ModBusBat + ".holdingRegisters.40801_GridWSpt", /*Sollwert der Netzaustauschleistung*/
-    FedInSpntCom = ModBusBat + ".holdingRegisters.40151_FedInSpntCom", /*Wirk- und Blindleistungsregelung über Kommunikation*/
-    FedInPwrAtCom = ModBusBat + ".holdingRegisters.40149_FedInPwrAtCom", /*Wirkleistungsvorgabe*/
-    BAT_SoC = ModBusBat + ".inputRegisters.30845_BAT_SoC", /*selbserklärend ;) */
-    SelfCsmpDmLim = ModBusBat + ".inputRegisters.31009_SelfCsmpDmLim", /*unteres Entladelimit Eigenverbrauchsbereich (Saisonbetrieb)*/
-    SelfCsmpBatChaSttMin =  ModBusBat + ".holdingRegisters.40073_SelfCsmpBatChaSttMin", /*unteres Entladelimit Eigenverbrauchsbereich SBS 3.7-10*/
-    RemainChrgTime = ModBusBat + ".inputRegisters.31007_RmgChaTm", /*verbleibende Restladezeit für Boost Ladung (nur PB Speicher)*/
-    PowerOut = ModBusBat + ".inputRegisters.30867_TotWOut", /*aktuelle Einspeiseleistung am Netzanschlußpunkt, BatWR*/
-    WMaxCha = ModBusBat + ".holdingRegisters.40189_WMaxCha", /*max Ladeleistung BatWR*/
-    WMaxDsch = ModBusBat + ".holdingRegisters.40191_WMaxDsch", /*max Entladeleistung BatWR*/
-    BatType = ModBusBat + ".holdingRegisters.40035_BatType", /*Abfrage Batterietyp*/
-    PowerAC = ModBusBat + ".inputRegisters.30775_PowerAC", /*Power AC*/
-    Dev_Type = ModBusBat + ".inputRegisters.30053_DevTypeId", /*Typnummer*/
-    Bat_Chrg_Mode = ModBusBat + ".inputRegisters.30853_ActiveChargeMode", /*Aktives Batterieladeverfahren, nur für SI+Blei Akku nötig*/
+var BatChaMaxW = ModBusBat + ".holdingRegisters.40795_CmpBMS_BatChaMaxW",/*Maximale Batterieladeleistung*/
+    BatDsChaMaxW = ModBusBat + ".holdingRegisters.40799_CmpBMS_BatDschMaxW",/*Maximale Batterieentladeleistung*/
+    FedInSpntCom = ModBusBat + ".holdingRegisters.40151_Inverter_WModCfg_WCtlComCfg_WCtlComAct", /*Wirk- und Blindleistungsregelung über Kommunikation*/
+    FedInPwrAtCom = ModBusBat + ".holdingRegisters.40149_Inverter_WModCfg_WCtlComCfg_WSpt", /*Wirkleistungsvorgabe*/
+    BAT_SoC = ModBusBat + ".inputRegisters.30845_Bat_ChaStt", /*selbserklärend ;) */
+    SelfCsmpDmLim = 10, /*unteres Entladelimit Eigenverbrauchsbereich (Saisonbetrieb)*/
+    PowerOut = SMA_EM + ".psurplus", /*aktuelle Einspeiseleistung am Netzanschlußpunkt, BatWR*/
+    WMaxCha = 5000, /*max Ladeleistung BatWR*/
+    WMaxDsch = 5000, /*max Entladeleistung BatWR*/
+    BatType = 1785, /*Abfrage Batterietyp*/
+    PowerAC = ModBusBat + ".inputRegisters.30775_GridMs_TotW", /*Power AC*/
+    Dev_Type = 19049, /*Typnummer*/
     bms_def = 2424,
     SpntCom_def = 803,
     lastSpntCom = 0,
@@ -50,16 +43,9 @@ var CmpBMSOpMod = ModBusBat + ".holdingRegisters.40236_CmpBMSOpMod",/*Betriebsar
 // ab hier Programmcode, nichts ändern!
 function processing() {
 // Start der Parametrierung
-  if (SMA_EM != ""){
-    PowerOut = SMA_EM + ".psurplus" /*aktuelle Einspeiseleistung am Netzanschlußpunkt, SMA-EM Adapter*/
-  }
   var DevType = getState(Dev_Type).val
   if (DevType < 9356 || DevType > 9362) {
     var batlimit = getState(SelfCsmpDmLim).val
-  }
-  // Sbs 3.7ff
-  if (DevType >= 9356 && DevType <= 9362) {
-    var batlimit = getState(SelfCsmpBatChaSttMin).val
   }
   if (batlimit < 0 || batlimit > 100){
     console.log("Warnung! Ausgelesenes Entladelimit unplausibel! Setze auf 0%")
@@ -96,12 +82,6 @@ function processing() {
   if (debug == 1){console.log("Verbraucher:" + pwr_verbrauch.toFixed(0) + "W")}
     
 //Parametrierung Speicher
-  if (bat != 1785) {
-    RmgChaTm = getState(RemainChrgTime).val/3600
-    if (DevType < 9300) {
-      var batchrgmode = getState(Bat_Chrg_Mode).val
-    }
-  }
   // Lademenge
   var ChaEnrg_full = Math.ceil((batcap * (100 - batsoc) / 100)*(1/wr_eff))
   var ChaEnrg = ChaEnrg_full
@@ -217,10 +197,6 @@ function processing() {
         max_pwr = Math.round(pvfc[0][1]-pvlimit_calc)
         if (current_pwr_diff > max_pwr){
           max_pwr = Math.round(current_pwr_diff)
-          if (awattar_active == 1){
-            SpntCom = 803
-            PwrAtCom = PwrAtCom_def
-          }
         }
       }
     }
@@ -239,18 +215,8 @@ function processing() {
 //write data
 if (maxchrg != maxchrg_def || maxchrg != lastmaxchrg || maxdischrg != maxdischrg_def || maxdischrg != lastmaxdischrg) {
   if (debug == 1){console.log("Daten an WR:" + maxchrg + ', '+ maxdischrg)}
-  setState(CmpBMSOpMod, bms, false);
   setState(BatChaMaxW, maxchrg, false);
   setState(BatDsChaMaxW, maxdischrg, false);
-  //alle SBS BatWR brauchen mehr Daten
-  if ((DevType >= 9324 && DevType <= 9326) || (DevType >= 9356 && DevType <= 9359) ){
-    //delayed ab 5. register ... WR Überlastung
-    setStateDelayed(BatChaMinW, minchrg, false, 1000);
-    setStateDelayed(BatDsChaMinW, mindischrg, false, 1000);
-  }
-  if ( DevType >= 9300 ){
-    setStateDelayed(SollAC, GridWSpt, false, 1000);
-  }
 }
 lastmaxchrg = maxchrg
 lastmaxdischrg = maxdischrg
