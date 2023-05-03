@@ -17,6 +17,7 @@ var update = 5, /*Update interval in sek, 15 ist ein guter Wert*/
     wr_eff = 0.9, /* Bat + WR Effizienz z.b. Li-Ion 0,9 (90%), PB 0,8 (80%), oder auch halbe Roundtrip-Effizienz*/
     bat_wr_pwr = 0, /* Ladeleistung der Batterie in W, 0=automatik (wird ausgelesen)*/
     ModBusBat = "modbus.0", /*ID der Modbusinstanz im ioBroker für den BatterieWR*/
+    vis = "0_userdata.0.",
     SMA_EM = "sma-em.0.3013343860", /*Name der SMA EnergyMeter/HM2 Instanz bei installierten SAM-EM Adapter, leer lassen wenn nicht vorhanden*/
     Javascript = "javascript.0",
     Verbraucher = []; /*starke Verbraucher mit Power in W berücksichtigen, hier kann der Realverbrauch in einem externen Script berechnet werden*/
@@ -26,6 +27,10 @@ var BatChaMaxW = ModBusBat + ".holdingRegisters.40795_CmpBMS_BatChaMaxW",/*Maxim
     BatDsChaMaxW = ModBusBat + ".holdingRegisters.40799_CmpBMS_BatDschMaxW",/*Maximale Batterieentladeleistung*/
     FedInSpntCom = ModBusBat + ".holdingRegisters.40151_Inverter_WModCfg_WCtlComCfg_WCtlComAct", /*Wirk- und Blindleistungsregelung über Kommunikation*/
     FedInPwrAtCom = ModBusBat + ".holdingRegisters.40149_Inverter_WModCfg_WCtlComCfg_WSpt", /*Wirkleistungsvorgabe*/
+    BatChaMaxWvis = vis + "40795_CmpBMS_BatChaMaxW",/*Maximale Batterieladeleistung*/
+    BatDsChaMaxWvis = vis + "40799_CmpBMS_BatDschMaxW",/*Maximale Batterieentladeleistung*/
+    FedInSpntComvis = vis + "40151_Inverter_WModCfg_WCtlComCfg_WCtlComAct", /*Wirk- und Blindleistungsregelung über Kommunikation*/
+    FedInPwrAtComvis = vis + "40149_Inverter_WModCfg_WCtlComCfg_WSpt", /*Wirkleistungsvorgabe*/
     BAT_SoC = ModBusBat + ".inputRegisters.30845_Bat_ChaStt", /*selbserklärend ;) */
     SelfCsmpDmLim = 10, /*unteres Entladelimit Eigenverbrauchsbereich (Saisonbetrieb)*/
     PowerOut = SMA_EM + ".psurplus", /*aktuelle Einspeiseleistung am Netzanschlußpunkt, BatWR*/
@@ -43,9 +48,9 @@ var BatChaMaxW = ModBusBat + ".holdingRegisters.40795_CmpBMS_BatChaMaxW",/*Maxim
 // ab hier Programmcode, nichts ändern!
 function processing() {
 // Start der Parametrierung
-  var DevType = getState(Dev_Type).val
+  var DevType = Dev_Type
   if (DevType < 9356 || DevType > 9362) {
-    var batlimit = getState(SelfCsmpDmLim).val
+    var batlimit = SelfCsmpDmLim
   }
   if (batlimit < 0 || batlimit > 100){
     console.log("Warnung! Ausgelesenes Entladelimit unplausibel! Setze auf 0%")
@@ -56,12 +61,12 @@ function processing() {
       batminlimit = batlimit+bat_grenze,
       batwr_pwr = bat_wr_pwr
       if (bat_wr_pwr == 0){
-        batwr_pwr = getState(WMaxCha).val
+        batwr_pwr = WMaxCha
       }
   var maxchrg_def = batwr_pwr,
-      maxdischrg_def = getState(WMaxDsch).val,
+      maxdischrg_def = WMaxDsch,
       PwrAtCom_def = batwr_pwr*(253/230), //max power bei 253V 
-      bat = getState(BatType).val,
+      bat = BatType,
       power_ac = getState(PowerAC).val*-1,
       pvlimit = (pvpeak / 100 * surlimit),
       pwr_verbrauch = 0,
@@ -208,6 +213,8 @@ if (maxchrg != maxchrg_def || maxchrg != lastmaxchrg || maxdischrg != maxdischrg
   if (debug == 1){console.log("Daten an WR:" + maxchrg + ', '+ maxdischrg)}
   setState(BatChaMaxW, maxchrg, false);
   setState(BatDsChaMaxW, maxdischrg, false);
+  setState(BatChaMaxWvis, maxchrg, false);
+  setState(BatDsChaMaxWvis, maxdischrg, false);
 }
 lastmaxchrg = maxchrg
 lastmaxdischrg = maxdischrg
@@ -217,6 +224,8 @@ if (SpntCom != SpntCom_def || SpntCom != lastSpntCom) {
   if (debug == 1){console.log("Daten an WR:" + SpntCom + ', ' + PwrAtCom)}
   setState(FedInSpntCom, SpntCom, false);
   setState(FedInPwrAtCom, PwrAtCom, false);
+  setState(FedInSpntComvis, SpntCom, false);
+  setState(FedInPwrAtComvis, PwrAtCom, false);
 }
 lastSpntCom = SpntCom
 
