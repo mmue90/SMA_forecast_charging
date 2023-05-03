@@ -10,7 +10,7 @@ var debug = 1; /*debug ausgabe ein oder aus 1/0 */
 var update = 5, /*Update interval in sek, 15 ist ein guter Wert*/
     pvpeak = 6600, /*pv anlagenleistung Wp */
     batcap = 5120, /*netto batterie kapazität in Wh, statisch wegen fehlerhafter Berechnung im SI*/
-    surlimit = 100, /*pv einspeise limit in % */
+    surlimit = 90, /*pv einspeise limit in % */
     bat_grenze = 10, /*nutzbare mindestladung der Batterie, nicht absolutwert sondern zzgl unterer entladegrenze des Systems! z.b. 50% Entladetiefe + 10% -> bat_grenze = 10*/
     bat_ziel = 100, /*gewünschtes Ladeziel der Regelung, bei Blei ca 85% da dann die Ladeleistung stark abfällt und keine vernünftige Regelung mehr zulässt. Bei LI sollte es 100 sein.*/
     grundlast = 100, /*Grundlast in Watt falls bekannt*/
@@ -88,18 +88,9 @@ function processing() {
   ChaEnrg = Math.max(Math.ceil((batcap * (bat_ziel - batsoc) / 100)*(1/wr_eff)), 0);
   var ChaTm = ChaEnrg/batwr_pwr; //Ladezeit
 
-  if ( bat != 1785 && ChaTm <= 0 ) {
-    ChaTm = RmgChaTm
-    ChaEnrg = ChaEnrg_full
-  }
   if ( bat == 1785 && ChaTm <= 0 ) {
     ChaTm = ChaEnrg_full/batwr_pwr
     ChaEnrg = ChaEnrg_full
-  }
-  // PB ... Regelung nur bei Schnellladung
-  if ( DevType < 9300 && bat != 1785 && batchrgmode != 1767 ) {
-    ChaTm = 0
-    ChaEnrg = 0
   }
 // Ende der Parametrierung
   if (debug == 1){console.log("Lademenge " + ChaEnrg + "Wh")}
