@@ -56,30 +56,30 @@ function processing() {
     console.log("Warnung! Ausgelesenes Entladelimit unplausibel! Setze auf 0%")
     batlimit = 0
   }
-  var batsoc = Math.min(getState(BAT_SoC).val,100),
-      cur_power_out = getState(PowerOut).val,
-      batminlimit = batlimit+bat_grenze,
-      batwr_pwr = bat_wr_pwr
+  var batsoc = Math.min(getState(BAT_SoC).val,100),     //batsoc = Batterieladestand
+      cur_power_out = getState(PowerOut).val,           //cur_power_out = Einspeisung an SHM
+      batminlimit = batlimit+bat_grenze,                //batminlimit = 20
+      batwr_pwr = bat_wr_pwr                            //batwr_pwr = 0 --> Automatik
       if (bat_wr_pwr == 0){
-        batwr_pwr = WMaxCha
+        batwr_pwr = WMaxCha                             //batwr_pwr = 5000
       }
-  var maxchrg_def = batwr_pwr,
-      maxdischrg_def = WMaxDsch,
-      PwrAtCom_def = batwr_pwr*(253/230), //max power bei 253V 
-      bat = BatType,
-      power_ac = getState(PowerAC).val*-1,
-      pvlimit = (pvpeak / 100 * surlimit),
+  var maxchrg_def = batwr_pwr,                          //maxchrg_def = batwr_pwr = 5000
+      maxdischrg_def = WMaxDsch,                        //maxdischrg_def = 5000
+      PwrAtCom_def = batwr_pwr*(253/230),               //max power bei 253V: 5000*(253/230)=5500
+      bat = BatType,                                    //bat = 1785
+      power_ac = getState(PowerAC).val*-1,              //power_ac = -(Einspeisung an SHM)
+      pvlimit = (pvpeak / 100 * surlimit),              //pvlimit = 6600/100*0,9 = 5940
       pwr_verbrauch = 0,
       /* Default Werte setzen*/
       RmgChaTm = 0,
-      bms = bms_def, 
+      bms = bms_def,                                    //bms = 2424
       minchrg = 0,
-      maxchrg = maxchrg_def,
+      maxchrg = maxchrg_def,                            //maxchrg = maxchrg_def = batwr_pwr = 5000
       mindischrg = 0,
-      maxdischrg = maxdischrg_def,
+      maxdischrg = maxdischrg_def,                      //maxdischrg = maxdischrg_def = 5000
       GridWSpt = 0,
-      SpntCom = SpntCom_def,
-      PwrAtCom = PwrAtCom_def,
+      SpntCom = SpntCom_def,                            //SpntCom = 803
+      PwrAtCom = PwrAtCom_def,                          //PwrArCom = 5500
       awattar_active = 0;
   for (let v = 0; v < Verbraucher.length ; v++) {
     pwr_verbrauch = pwr_verbrauch + getState(Verbraucher[v]).val
@@ -88,13 +88,13 @@ function processing() {
     
 //Parametrierung Speicher
   // Lademenge
-  var ChaEnrg_full = Math.ceil((batcap * (100 - batsoc) / 100)*(1/wr_eff))
+  var ChaEnrg_full = Math.ceil((batcap * (100 - batsoc) / 100)*(1/wr_eff))              //Energiemenge bis vollständige Ladung
   var ChaEnrg = ChaEnrg_full
-  ChaEnrg = Math.max(Math.ceil((batcap * (bat_ziel - batsoc) / 100)*(1/wr_eff)), 0);
-  var ChaTm = ChaEnrg/batwr_pwr; //Ladezeit
+  ChaEnrg = Math.max(Math.ceil((batcap * (bat_ziel - batsoc) / 100)*(1/wr_eff)), 0);    //ChaEnrg = Energiemenge bis vollständige Ladung
+  var ChaTm = ChaEnrg/batwr_pwr;                                                        //Ladezeit = Energiemenge bis vollständige Ladung / Ladeleistung WR
 
-  if ( bat == 1785 && ChaTm <= 0 ) {
-    ChaTm = ChaEnrg_full/batwr_pwr
+  if ( bat == 1785 && ChaTm <= 0 ) {                    //Wenn Batterietyp = 1785 && Ladezeit <= 0
+    ChaTm = ChaEnrg_full/batwr_pwr                      //Ladezeit = Energiemenge bis vollständige Ladung / Ladeleistung WR
     ChaEnrg = ChaEnrg_full
   }
 // Ende der Parametrierung
@@ -105,6 +105,7 @@ function processing() {
   var latesttime
   var pvfc = []
   var f = 0
+  /*Liest die PV-Prognose für die nächsten 24 Stunden ein */
   for (let p = 0; p < 48 ; p++) { /* 48 = 24h a 30min Fenster*/
     var pvpower50 = getState(Javascript + ".electricity.pvforecast."+ p + ".power").val,
         pvpower90 = getState(Javascript + ".electricity.pvforecast."+ p + ".power90").val,
